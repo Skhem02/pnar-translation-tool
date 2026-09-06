@@ -23,6 +23,40 @@ st.set_page_config(
 
 
 # ============================================================
+# HIDE UNNECESSARY STREAMLIT UI
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+
+    /* Hide Streamlit toolbar / menu */
+    [data-testid="stToolbar"] {
+        visibility: hidden;
+    }
+
+    /* Hide Streamlit status/developer widget */
+    [data-testid="stStatusWidget"] {
+        display: none;
+    }
+
+    /* Hide deploy button */
+    [data-testid="stDeployButton"] {
+        display: none;
+    }
+
+    /* Hide Streamlit footer */
+    footer {
+        visibility: hidden;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
 # GOOGLE AUTHENTICATION
 # ============================================================
 
@@ -131,43 +165,53 @@ def save_translation(
 
 
 # ============================================================
-# LOGIN
+# START SCREEN
 # ============================================================
 
 def login_screen():
 
     st.title("📝 Pnar Translation Tool")
 
-    st.write(
-        "Enter your name before starting the translation work."
+    st.markdown(
+        """
+        ### Cha phi ki bru Pnar: Wan iada i ia ka ktien yong i ha kam kani ka juk AI!
+
+        Ka thong toh yow pynman ia ka ktien Pnar yow tip ki bru ha waroh ka pyrthai,
+        kam ka Khasi.
+
+        Kani ka kreh ym ye u leh samen. Toh ka kamram yong i yow iada,
+        pynneh wei pynman ia ka ktien yong i kawa im.
+        """
     )
 
-    name = st.text_input(
-        "Your name",
-        placeholder="Enter your full name",
+    st.markdown("---")
+
+    st.markdown(
+        """
+        ### To the Pnar people: Let’s save our language in the age of AI!
+
+        The goal is to make Pnar known worldwide, just like Khasi.
+
+        This work cannot be done alone. It is a shared duty to protect,
+        preserve, and keep our language alive!
+        """
     )
+
+    st.markdown("---")
 
     if st.button(
-        "Start",
+        "Next →",
         type="primary",
         use_container_width=True,
     ):
 
-        if not name.strip():
+        # A common anonymous/default annotator name is used.
+        st.session_state.annotator_name = "abc"
 
-            st.warning(
-                "Please enter your name first."
-            )
+        st.session_state.review_mode = False
+        st.session_state.pnar_draft = ""
 
-        else:
-
-            st.session_state.annotator_name = name.strip()
-
-            # Initialize translation workflow
-            st.session_state.review_mode = False
-            st.session_state.pnar_draft = ""
-
-            st.rerun()
+        st.rerun()
 
 
 # ============================================================
@@ -175,14 +219,6 @@ def login_screen():
 # ============================================================
 
 def translation_screen():
-
-    annotator = st.session_state.annotator_name
-
-    st.title("📝 Pnar Translation Tool")
-
-    st.caption(
-        f"Translator: **{annotator}**"
-    )
 
     worksheet = get_working_sheet()
 
@@ -193,12 +229,6 @@ def translation_screen():
         )
 
         return
-
-    dataset_id, dataset_name = get_active_dataset()
-
-    st.caption(
-        f"Dataset: **{dataset_name or dataset_id}**"
-    )
 
     # ========================================================
     # GET A NEW SENTENCE
@@ -335,7 +365,7 @@ def translation_screen():
                     worksheet,
                     row_number,
                     pnar_text,
-                    annotator,
+                    st.session_state.annotator_name,
                 )
 
                 # --------------------------------------------
