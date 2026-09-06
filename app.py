@@ -50,6 +50,24 @@ st.markdown(
         visibility: hidden;
     }
 
+    /* Keep the interface clean during reruns */
+    [data-testid="stStatusWidget"] {
+        display: none;
+    }
+
+    /* Mobile-friendly buttons */
+    div.stButton > button {
+        min-height: 46px;
+        border-radius: 10px;
+        font-size: 1rem;
+    }
+
+    /* Reduce excess mobile spacing */
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -60,7 +78,7 @@ st.markdown(
 # GOOGLE AUTHENTICATION
 # ============================================================
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def get_client():
 
     credentials = Credentials.from_service_account_info(
@@ -170,34 +188,56 @@ def save_translation(
 
 def login_screen():
 
-    st.title("📝 Pnar Translation Tool")
+    st.title("📝 Pnar Translation")
 
     st.markdown(
         """
-        ### Cha phi ki bru Pnar: Wan iada i ia ka ktien yong i ha kam kani ka juk AI!
-
-        Ka thong toh yow pynman ia ka ktien Pnar yow tip ki bru ha waroh ka pyrthai,
-        kam ka Khasi.
-
-        Kani ka kreh ym ye u leh samen. Toh ka kamram yong i yow iada,
-        pynneh wei pynman ia ka ktien yong i kawa im.
-        """
+        <div style="
+            border: 1px solid rgba(128,128,128,0.35);
+            border-radius: 14px;
+            padding: 16px;
+            margin: 8px 0 14px 0;
+            background: rgba(128,128,128,0.08);
+            line-height: 1.5;
+        ">
+        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">
+            Cha phi ki bru Pnar.
+        </div>
+        <div style="font-size: 0.96rem;">
+            Wan iada i ia ka ktien yong i ha kam kani ka juk AI!<br>
+            Ka thong toh iow pynman ia ka ktien Pnar iow tip ki bru ha waroh ka pyrthai,
+            kam ka Khasi.<br>
+            Kani ka kreh ym ye u leh samen. Toh ka kamram yong i iow iada,
+            pynneh wei pynman ia ka ktien yong i kawa im.
+        </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-
-    st.markdown("---")
 
     st.markdown(
         """
-        ### To the Pnar people: Let’s save our language in the age of AI!
-
-        The goal is to make Pnar known worldwide, just like Khasi.
-
-        This work cannot be done alone. It is a shared duty to protect,
-        preserve, and keep our language alive!
-        """
+        <div style="
+            border: 1px solid rgba(128,128,128,0.35);
+            border-radius: 14px;
+            padding: 16px;
+            margin: 0 0 18px 0;
+            background: rgba(128,128,128,0.08);
+            line-height: 1.5;
+        ">
+        <div style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">
+            To the Pnar people.
+        </div>
+        <div style="font-size: 0.96rem;">
+            Let’s save our language in the age of AI!<br>
+            Our goal is to make Pnar known worldwide, just like Khasi.<br>
+            This work cannot be done alone. It is our shared duty to protect,
+            preserve, and keep our language alive.
+        </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-
-    st.markdown("---")
 
     if st.button(
         "Next →",
@@ -220,7 +260,26 @@ def login_screen():
 
 def translation_screen():
 
-    worksheet = get_working_sheet()
+    try:
+        worksheet = get_working_sheet()
+
+    except gspread.exceptions.APIError:
+
+        st.error(
+            "⚠️ The translation service is temporarily unavailable. "
+            "Please try again later."
+        )
+
+        return
+
+    except Exception:
+
+        st.error(
+            "⚠️ Unable to connect to the translation dataset. "
+            "Please try again later."
+        )
+
+        return
 
     if worksheet is None:
 
