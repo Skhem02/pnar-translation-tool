@@ -184,11 +184,11 @@ def start_screen():
             line-height: 1.48;
         ">
         <div style="font-size: 1.02rem; font-weight: 700; margin-bottom: 7px;">
-            Cha phi ki jaitbru Pnar
+            Cha phi ki bru Pnar
         </div>
         <div style="font-size: 0.94rem;">
             Wan iada i ia ka ktien yong i ha kam kani ka juk AI!
-            Ka thong toh yow pynman ia ka ktien Pnar yow tip ki bru
+            Ka thong toh yow pynman ia ka ktien Pnar iow tip ki bru
             ha waroh ka pyrthai, kam ka Khasi.
             Kani ka kreh ym ye u leh samen. Toh ka kamram yong i
             yow iada, pynneh wei pynman ia ka ktien yong i kawa im.
