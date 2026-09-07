@@ -1,4 +1,3 @@
-import json
 import time
 import uuid
 
@@ -12,8 +11,8 @@ import streamlit as st
 
 APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
 
-REQUEST_TIMEOUT = 20
-MAX_RETRIES = 4
+REQUEST_TIMEOUT = 12
+MAX_RETRIES = 3
 
 
 st.set_page_config(
@@ -37,10 +36,10 @@ st.markdown(
 
     .block-container {
         max-width: 760px;
-        padding-top: 1.25rem;
-        padding-bottom: 1.5rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        padding-top: 1rem;
+        padding-bottom: 1.25rem;
+        padding-left: 0.9rem;
+        padding-right: 0.9rem;
     }
 
     div.stButton > button {
@@ -49,11 +48,15 @@ st.markdown(
         font-size: 1rem;
     }
 
+    textarea {
+        font-size: 1rem !important;
+    }
+
     @media (max-width: 600px) {
         .block-container {
-            padding-top: 0.75rem;
-            padding-left: 0.75rem;
-            padding-right: 0.75rem;
+            padding-top: 0.55rem;
+            padding-left: 0.65rem;
+            padding-right: 0.65rem;
         }
     }
     </style>
@@ -67,7 +70,7 @@ st.markdown(
 # ============================================================
 
 def backend_request(action, payload=None):
-    """Call Apps Script with retry/backoff for temporary quota/network errors."""
+    """Small, fast backend call with short exponential retry."""
 
     data = {
         "action": action,
@@ -93,23 +96,25 @@ def backend_request(action, payload=None):
             if result.get("ok"):
                 return result
 
-            # Backend can explicitly tell us to retry.
             if result.get("retry"):
-                time.sleep(0.7 * (2 ** attempt))
-                continue
+                last_error = result.get("error", "Temporary backend busy.")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(0.25 * (2 ** attempt))
+                    continue
 
             return result
 
         except (requests.RequestException, ValueError) as exc:
-            last_error = exc
+            last_error = str(exc)
+
             if attempt < MAX_RETRIES - 1:
-                time.sleep(0.7 * (2 ** attempt))
+                time.sleep(0.25 * (2 ** attempt))
 
     return {
         "ok": False,
-        "error": "Temporary connection problem.",
         "retry": True,
-        "details": str(last_error) if last_error else "",
+        "error": "Temporary connection problem.",
+        "details": last_error or "",
     }
 
 
@@ -120,9 +125,7 @@ def backend_request(action, payload=None):
 def claim_sentence():
     result = backend_request(
         "claim",
-        {
-            "annotator": "abc",
-        },
+        {"annotator": "abc"},
     )
 
     if result.get("ok"):
@@ -152,20 +155,6 @@ def save_translation(row, claim_id, pnar_text):
 
 
 # ============================================================
-# RELEASE CLAIM
-# ============================================================
-
-def release_sentence(row, claim_id):
-    return backend_request(
-        "release",
-        {
-            "row": row,
-            "claim_id": claim_id,
-        },
-    )
-
-
-# ============================================================
 # START SCREEN
 # ============================================================
 
@@ -176,22 +165,21 @@ def start_screen():
     st.markdown(
         """
         <div style="
-            border: 1px solid rgba(128,128,128,0.35);
+            border: 1px solid rgba(128,128,128,0.30);
             border-radius: 14px;
-            padding: 15px;
-            margin: 6px 0 12px 0;
+            padding: 14px;
+            margin: 4px 0 10px 0;
             background: rgba(128,128,128,0.08);
-            line-height: 1.48;
+            line-height: 1.45;
         ">
-        <div style="font-size: 1.02rem; font-weight: 700; margin-bottom: 7px;">
+        <div style="font-size: 1rem; font-weight: 700; margin-bottom: 6px;">
             Cha phi ki bru Pnar
         </div>
-        <div style="font-size: 0.94rem;">
+        <div style="font-size: 0.92rem;">
             Wan iada i ia ka ktien yong i ha kam kani ka juk AI!
-            Ka thong toh yow pynman ia ka ktien Pnar iow tip ki bru
-            ha waroh ka pyrthai, kam ka Khasi.
-            Kani ka kreh ym ye u leh samen. Toh ka kamram yong i
-            yow iada, pynneh wei pynman ia ka ktien yong i kawa im.
+            Ka thong toh yow pynman ia ka ktien Pnar iow tip ki bru ha waroh ka pyrthai,
+            kam ka Khasi. Kani ka kreh ym ye u leh samen.
+            Toh ka kamram yong i yow iada, pynneh wei pynman ia ka ktien yong i kawa im.
         </div>
         </div>
         """,
@@ -201,17 +189,17 @@ def start_screen():
     st.markdown(
         """
         <div style="
-            border: 1px solid rgba(128,128,128,0.35);
+            border: 1px solid rgba(128,128,128,0.30);
             border-radius: 14px;
-            padding: 15px;
-            margin: 0 0 16px 0;
+            padding: 14px;
+            margin: 0 0 14px 0;
             background: rgba(128,128,128,0.08);
-            line-height: 1.48;
+            line-height: 1.45;
         ">
-        <div style="font-size: 1.02rem; font-weight: 700; margin-bottom: 7px;">
+        <div style="font-size: 1rem; font-weight: 700; margin-bottom: 6px;">
             To the Pnar people
         </div>
-        <div style="font-size: 0.94rem;">
+        <div style="font-size: 0.92rem;">
             Let’s save our language in the age of AI!
             Our goal is to make Pnar known worldwide, just like Khasi.
             This work cannot be done alone. It is our shared duty
@@ -261,14 +249,16 @@ def translation_screen():
     english = st.session_state.get("current_english")
     claim_id = st.session_state.get("current_claim_id")
 
-    # Temporary backend failure: don't destroy the user's current work.
     if row is None and english is None and claim_id is None:
         st.error(
-            "⚠️ The translation service is busy right now. "
-            "Please wait a moment and try again."
+            "⚠️ The translation service is busy. Please try again."
         )
 
-        if st.button("Try again", type="primary", use_container_width=True):
+        if st.button(
+            "Try again",
+            type="primary",
+            use_container_width=True,
+        ):
             st.session_state.pop("current_row", None)
             st.session_state.pop("current_english", None)
             st.session_state.pop("current_claim_id", None)
@@ -276,12 +266,7 @@ def translation_screen():
 
         return
 
-    # ========================================================
-    # NO SENTENCES REMAIN
-    # ========================================================
-
     if row is None:
-
         st.success("🎉 All available sentences have been translated.")
 
         if st.button("Check again", use_container_width=True):
@@ -341,7 +326,7 @@ def translation_screen():
 
                 if result.get("retry"):
                     st.warning(
-                        "The server is busy. Your translation is still on this screen. "
+                        "The server is busy. Your translation is still here. "
                         "Please press Save & Next again."
                     )
                 else:
@@ -349,7 +334,7 @@ def translation_screen():
                         result.get(
                             "error",
                             "The translation could not be saved. "
-                            "Your text is still on this screen.",
+                            "Your text is still here.",
                         )
                     )
 
