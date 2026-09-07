@@ -11,8 +11,8 @@ import streamlit as st
 
 APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
 
-REQUEST_TIMEOUT = 12
-MAX_RETRIES = 3
+REQUEST_TIMEOUT = 8
+MAX_RETRIES = 2
 
 
 st.set_page_config(
@@ -29,14 +29,31 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    [data-testid="stToolbar"] { visibility: hidden; }
-    [data-testid="stStatusWidget"] { display: none; }
-    [data-testid="stDeployButton"] { display: none; }
-    footer { visibility: hidden; }
+    /* Remove the Streamlit top header completely so it cannot cover
+       or leave a black strip over the content on phones. */
+    [data-testid="stHeader"] {
+        display: none;
+    }
+
+    [data-testid="stToolbar"] {
+        display: none;
+    }
+
+    [data-testid="stStatusWidget"] {
+        display: none;
+    }
+
+    [data-testid="stDeployButton"] {
+        display: none;
+    }
+
+    footer {
+        display: none;
+    }
 
     .block-container {
         max-width: 760px;
-        padding-top: 1rem;
+        padding-top: 0.75rem;
         padding-bottom: 1.25rem;
         padding-left: 0.9rem;
         padding-right: 0.9rem;
@@ -54,7 +71,7 @@ st.markdown(
 
     @media (max-width: 600px) {
         .block-container {
-            padding-top: 0.55rem;
+            padding-top: 0.4rem;
             padding-left: 0.65rem;
             padding-right: 0.65rem;
         }
@@ -70,7 +87,7 @@ st.markdown(
 # ============================================================
 
 def backend_request(action, payload=None):
-    """Small, fast backend call with short exponential retry."""
+    """Fast backend call with a short retry for transient failures."""
 
     data = {
         "action": action,
@@ -96,11 +113,10 @@ def backend_request(action, payload=None):
             if result.get("ok"):
                 return result
 
-            if result.get("retry"):
+            if result.get("retry") and attempt < MAX_RETRIES - 1:
                 last_error = result.get("error", "Temporary backend busy.")
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(0.25 * (2 ** attempt))
-                    continue
+                time.sleep(0.15 * (attempt + 1))
+                continue
 
             return result
 
@@ -108,7 +124,7 @@ def backend_request(action, payload=None):
             last_error = str(exc)
 
             if attempt < MAX_RETRIES - 1:
-                time.sleep(0.25 * (2 ** attempt))
+                time.sleep(0.15 * (attempt + 1))
 
     return {
         "ok": False,
@@ -138,9 +154,22 @@ def claim_sentence():
     return None, None, None
 
 
-# ============================================================
-# SAVE TRANSLATION
-# ============================================================
+def save_and_claim_next(row, claim_id, pnar_text):
+    """
+    Save the current translation and atomically claim the next sentence
+    in the same backend request. This removes one complete network round-trip
+    from the normal Save & Next workflow.
+    """
+    return backend_request(
+        "save_and_claim",
+        {
+            "row": row,
+            "claim_id": claim_id,
+            "pnar": pnar_text,
+            "annotator": "abc",
+        },
+    )
+
 
 def save_translation(row, claim_id, pnar_text):
     return backend_request(
@@ -160,7 +189,7 @@ def save_translation(row, claim_id, pnar_text):
 
 def start_screen():
 
-    st.title("📝 Pnar Translation Tool")
+    st.title("📝 Pnar Translation")
 
     st.markdown(
         """
@@ -177,7 +206,7 @@ def start_screen():
         </div>
         <div style="font-size: 0.92rem;">
             Wan iada i ia ka ktien yong i ha kam kani ka juk AI!
-            Ka thong toh yow pynman ia ka ktien Pnar iow tip ki bru ha waroh ka pyrthai,
+            Ka thong toh iow pynman ia ka ktien Pnar yow tip ki bru ha waroh ka pyrthai,
             kam ka Khasi. Kani ka kreh ym ye u leh samen.
             Toh ka kamram yong i yow iada, pynneh wei pynman ia ka ktien yong i kawa im.
         </div>
@@ -234,6 +263,8 @@ def load_next_sentence():
     st.session_state.current_claim_id = claim_id
     st.session_state.pnar_draft = ""
     st.session_state.review_mode = False
+
+    return row is not None
 
 
 # ============================================================
@@ -310,24 +341,33 @@ def translation_screen():
                     st.warning("Please enter a Pnar translation.")
                     return
 
-                result = save_translation(
+                result = save_and_claim_next(
                     row,
                     claim_id,
                     pnar_text,
                 )
 
                 if result.get("ok"):
-                    st.session_state.pop("current_row", None)
-                    st.session_state.pop("current_english", None)
-                    st.session_state.pop("current_claim_id", None)
+                    # The backend has already saved this sentence and,
+                    # when available, claimed the next one for this user.
+                    st.session_state.current_row = result.get("row")
+                    st.session_state.current_english = result.get("english")
+                    st.session_state.current_claim_id = result.get("claim_id")
                     st.session_state.pnar_draft = ""
                     st.session_state.review_mode = False
                     st.rerun()
 
+                if result.get("claim_lost"):
+                    # The old assignment expired or was otherwise lost.
+                    # Do not leave the user stuck on it: immediately request
+                    # a fresh sentence.
+                    load_next_sentence()
+                    st.rerun()
+
                 if result.get("retry"):
                     st.warning(
-                        "The server is busy. Your translation is still here. "
-                        "Please press Save & Next again."
+                        "Please wait a moment and press Save & Next again. "
+                        "Your translation is safe on this screen."
                     )
                 else:
                     st.error(
